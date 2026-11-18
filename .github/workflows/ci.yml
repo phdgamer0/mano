@@ -40,6 +40,7 @@ jobs:
         with:
           msystem: ${{ matrix.msys }}
           update: true
+          install: zip
           pacboy: >-
             cc:p cmake:p ninja:p ncurses:p pkgconf:p
 
@@ -64,7 +65,7 @@ jobs:
           cp -r examples "$dir"/
           if [ "${{ runner.os }}" = Windows ]; then
             cp mano.exe "$dir"/
-            7z a -tzip "dist/$dir.zip" "$dir" >/dev/null
+            zip -qr "dist/$dir.zip" "$dir"
           else
             cp mano "$dir"/
             tar -czf "dist/$dir.tar.gz" "$dir"
@@ -80,18 +81,22 @@ jobs:
           path: dist/*
 
   sanitizers:
-    name: sanitizers + differential fuzz (${{ matrix.cc }})
+    name: sanitizers + differential fuzz (${{ matrix.cc }}, ${{ matrix.targets }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        cc: [gcc, clang]
+        # gcc-multilib conflicts with the arm cross compilers, so split them.
+        include:
+          - { cc: gcc,   targets: "amd64 i386",  pkgs: gcc-multilib }
+          - { cc: clang, targets: "amd64 i386",  pkgs: gcc-multilib }
+          - { cc: gcc,   targets: "arm64 arm32", pkgs: "gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf qemu-user" }
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
         run: >-
           sudo apt-get update -q && sudo apt-get install -y -q cmake pkg-config
-          libncurses-dev gcc-multilib gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf qemu-user
+          libncurses-dev ${{ matrix.pkgs }}
       - name: Build with ASan + UBSan
         run: |
           cmake -S . -B build -DMANO_ASAN=ON -DCMAKE_C_COMPILER=${{ matrix.cc }}
@@ -100,11 +105,11 @@ jobs:
         env:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: bash tests/smoke.sh ./mano
-      - name: Differential fuzz (simulator vs native code, all targets)
+      - name: Differential fuzz (simulator vs native code)
         env:
           UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
         run: |
-          for t in amd64 i386 arm64 arm32; do
+          for t in ${{ matrix.targets }}; do
             TARGET=$t python3 tests/diff_fuzz.py ./mano 150
           done
 
