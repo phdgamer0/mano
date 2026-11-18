@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64,   os: ubuntu-24.04,     shell: bash,       static: ON }
+          - { name: linux-aarch64,  os: ubuntu-24.04-arm, shell: bash,       static: ON }
+          - { name: macos-arm64,    os: macos-latest,     shell: bash,       static: OFF }
+          - { name: macos-x86_64,   os: macos-15-intel,   shell: bash,       static: OFF }
+          - { name: windows-x86_64, os: windows-latest,   shell: "msys2 {0}", static: ON, msys: UCRT64 }
+          - { name: windows-arm64,  os: windows-11-arm,   shell: "msys2 {0}", static: ON, msys: CLANGARM64 }
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q cmake pkg-config libncurses-dev dpkg-dev
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.msys }}
+          update: true
+          pacboy: >-
+            cc:p cmake:p ninja:p ncurses:p pkgconf:p
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DMANO_STATIC=${{ matrix.static }}
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke test
+        run: bash tests/smoke.sh ./mano
+
+      - name: Package
+        run: |
+          ver=$(./mano --version | cut -d' ' -f2)
+          dir=mano-$ver-${{ matrix.name }}
+          mkdir -p dist "$dir"
+          cp README.md LICENSE "$dir"/
+          cp -r examples "$dir"/
+          if [ "${{ runner.os }}" = Windows ]; then
+            cp mano.exe "$dir"/
+            7z a -tzip "dist/$dir.zip" "$dir" >/dev/null
+          else
+            cp mano "$dir"/
+            tar -czf "dist/$dir.tar.gz" "$dir"
+          fi
+          if [ "${{ runner.os }}" = Linux ]; then
+            (cd build && cpack -G DEB && mv ./*.deb ../dist/)
+          fi
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mano-${{ matrix.name }}
+          path: dist/*
+
+  sanitizers:
+    name: sanitizers + differential fuzz (${{ matrix.cc }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: >-
+          sudo apt-get update -q && sudo apt-get install -y -q cmake pkg-config
+          libncurses-dev gcc-multilib gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf qemu-user
+      - name: Build with ASan + UBSan
+        run: |
+          cmake -S . -B build -DMANO_ASAN=ON -DCMAKE_C_COMPILER=${{ matrix.cc }}
+          cmake --build build --parallel
+      - name: Smoke test
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: bash tests/smoke.sh ./mano
+      - name: Differential fuzz (simulator vs native code, all targets)
+        env:
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          for t in amd64 i386 arm64 arm32; do
+            TARGET=$t python3 tests/diff_fuzz.py ./mano 150
+          done
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, sanitizers]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/* install.sh install.ps1
+          --title "mano $GITHUB_REF_NAME" --generate-notes --verify-tag

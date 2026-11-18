@@ -1,0 +1,28 @@
+---
+BasedOnStyle: LLVM
+Language: Cpp
+Standard: Latest
+
+# Never break lines.
+ColumnLimit: 0
+
+# Pointer and reference bound to the type: int* p, int& r.
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+# Keep single-line if statements on one line.
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
+
+# else / else if on a new line.
+BreakBeforeBraces: Custom
+BraceWrapping:
+  BeforeElse: true
+
+# 3-space indentation; access specifiers indented one level inside the class,
+# members one level below them.
+IndentWidth: 3
+IndentAccessModifiers: true
+
+# Indent everything inside namespaces, including nested ones.
+NamespaceIndentation: All

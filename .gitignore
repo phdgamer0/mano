@@ -1,0 +1,8 @@
+build/
+/mano
+/mano.exe
+compile_commands.json
+.cache/
+dist/
+*.s
+*.code-workspace
