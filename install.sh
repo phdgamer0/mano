@@ -17,6 +17,10 @@ case "$(uname -m)" in
     aarch64 | arm64) arch=$([ "$os" = macos ] && echo arm64 || echo aarch64) ;;
     *) echo "mano: no prebuilt binary for $(uname -m); build from source" >&2; exit 1 ;;
 esac
+if [ "$os-$arch" = macos-x86_64 ]; then
+    echo "mano: no prebuilt binary for Intel macOS; build from source" >&2
+    exit 1
+fi
 
 tag=${MANO_VERSION:-$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" |
     sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p')}

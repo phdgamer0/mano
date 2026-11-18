@@ -41,7 +41,7 @@ Installs to `%LOCALAPPDATA%\Programs\mano` and adds it to your user `PATH`.
 **Arch Linux** – a `PKGBUILD` is in [`packaging/aur`](packaging/aur):
 `cd packaging/aur && makepkg -si`.
 
-Prebuilt binaries: Linux (x86_64, aarch64; static), macOS (arm64, x86_64),
+Prebuilt binaries: Linux (x86_64, aarch64; static), macOS (arm64; Intel Macs build from source),
 Windows (x86_64, arm64; static).
 
 ## Build from source
