@@ -415,7 +415,13 @@ static void parse_line(Asm* a, Stmt* st) {
       }
       st->operand = t;
       st->flags |= ST_OPERAND;
-      if (scan_token(s, &pos, &t, &comma))
+      bool more = scan_token(s, &pos, &t, &comma);
+      /* Textbook form puts I after the address: STA PTR I. */
+      if (more && !(st->flags & ST_INDIRECT) && t.len == 1 && (s[t.off] == 'I' || s[t.off] == 'i')) {
+         st->flags |= ST_INDIRECT;
+         more = scan_token(s, &pos, &t, &comma);
+      }
+      if (more)
          aerr(a, lineno, "unexpected extra operand");
    }
    else if (scan_token(s, &pos, &t, &comma)) {

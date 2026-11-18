@@ -131,7 +131,7 @@ Cross targets print the matching build command, e.g.
 | `ORG 100`         | set the location counter (hex)           |
 | `LABEL, DEC -12`  | label with a decimal word                |
 | `LABEL, HEX 0A3F` | label with a hex word                    |
-| `LDA I X`         | indirect addressing                      |
+| `LDA X I`         | indirect addressing (`LDA I X` also OK)  |
 | `/` or `;`        | start a comment                          |
 | `END`             | end of source                            |
 

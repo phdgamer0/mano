@@ -29,7 +29,8 @@ def gen(rng):
         r = rng.random()
         if r < 0.45:
             op = rng.choice(MEM)
-            ind = " I P" + str(rng.randrange(2)) if rng.random() < 0.15 else " " + rng.choice(data)
+            ptr = "P" + str(rng.randrange(2))
+            ind = rng.choice([" I " + ptr, " " + ptr + " I"]) if rng.random() < 0.15 else " " + rng.choice(data)
             lines.append(f"        {op}{ind}")
         elif r < 0.85:
             lines.append("        " + rng.choice(REG))
